@@ -69,13 +69,3 @@ The client will be responsible for:
 
 Python is used because it simplifies graphical interface development and allows faster implementation of user interaction features.
 
----
-
-## System Architecture Overview
-
-The project follows a **client-server architecture**, where:
-
-- A **central server (C)** controls the game logic and communication.
-- Two **client applications (Python)** connect to the server.
-- All actions performed by players are sent to the server.
-- The server processes requests and sends responses back to clients.
