@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include "server.h"
 #include "protocol.h"
 #include "config.h"
@@ -11,49 +13,20 @@
 #include "session.h"
 #include "game_logic.h"
 
-int main()
+static void run_session(Client clientes[])
 {
-    int servidor_fd;
-    Client clientes[MAX_CLIENTES];
     Session sesion;
     GameState game;
     char buffer[BUFFER_SIZE];
     int i;
     int sesion_activa = 1;
 
-    servidor_fd = create_server();
-    if (servidor_fd < 0)
-    {
-        return 1;
-    }
-
     init_session(&sesion);
     init_game(&game);
 
-    for (i = 0; i < MAX_CLIENTES; i++)
-    {
-        init_client(&clientes[i]);
-    }
-
-    for (i = 0; i < MAX_CLIENTES; i++)
-    {
-        int socket_cliente;
-
-        printf("Esperando al cliente %d...\n", i + 1);
-        socket_cliente = accept_client(servidor_fd);
-
-        if (socket_cliente < 0)
-        {
-            close(servidor_fd);
-            return 1;
-        }
-
-        set_client_connected(&clientes[i], socket_cliente);
-    }
-
     set_session_state(&sesion, WAITING_AUTH);
 
-    printf("\nLos dos clientes ya están conectados\n");
+    printf("\n[HIJO] Los dos clientes ya están conectados\n");
 
     while (sesion_activa)
     {
@@ -68,31 +41,32 @@ int main()
                 continue;
             }
 
-			if (sesion.estado == ACTIVE)
-			{
-			    int jugador_esperado;
+            if (sesion.estado == ACTIVE)
+            {
+                int jugador_esperado;
 
-			    if (secret_word_ready(&game))
-			    {
-			        jugador_esperado = game.rm.guesser_id;
-			    }
-			    else
-			    {
-			        jugador_esperado = game.rm.setter_id;
-			    }
+                if (secret_word_ready(&game))
+                {
+                    jugador_esperado = game.rm.guesser_id;
+                }
+                else
+                {
+                    jugador_esperado = game.rm.setter_id;
+                }
 
-			    if (i != jugador_esperado)
-			    {
-			        continue;
-			    }
-			}
+                if (i != jugador_esperado)
+                {
+                    continue;
+                }
+            }
+
             leidos = receive_message(clientes[i].socket_fd, buffer, BUFFER_SIZE);
 
             if (leidos == 0)
             {
                 int otro = (i == 0) ? 1 : 0;
 
-                printf("Cliente %d se desconecto\n", i + 1);
+                printf("[HIJO] Cliente %d se desconecto\n", i + 1);
                 close(clientes[i].socket_fd);
                 reset_client(&clientes[i]);
                 set_session_state(&sesion, INTERRUPTED);
@@ -108,13 +82,13 @@ int main()
 
             if (leidos < 0)
             {
-                printf("Error al recibir mensaje del cliente %d\n", i + 1);
+                printf("[HIJO] Error al recibir mensaje del cliente %d\n", i + 1);
                 set_session_state(&sesion, INTERRUPTED);
                 sesion_activa = 0;
                 break;
             }
 
-            printf("Mensaje del cliente %d: %s\n", i + 1, buffer);
+            printf("[HIJO] Mensaje del cliente %d: %s\n", i + 1, buffer);
 
             parse_message(buffer, &msg);
 
@@ -126,7 +100,7 @@ int main()
                 {
                     set_client_authenticated(&clientes[i], msg.arg1);
                     send_message(clientes[i].socket_fd, RESP_LOGIN_OK);
-                    printf("Cliente %d autenticado como %s\n", i + 1, clientes[i].username);
+                    printf("[HIJO] Cliente %d autenticado como %s\n", i + 1, clientes[i].username);
 
                     if (are_both_authenticated(clientes, MAX_CLIENTES))
                     {
@@ -140,7 +114,7 @@ int main()
                         send_message(clientes[0].socket_fd, RESP_YOUR_TURN_SETWORD);
                         send_message(clientes[1].socket_fd, RESP_WAITING_PLAYER);
 
-                        printf("Ambos clientes autenticados. Sesion lista para iniciar\n");
+                        printf("[HIJO] Ambos clientes autenticados. Sesion lista para iniciar\n");
                     }
                     else
                     {
@@ -150,12 +124,12 @@ int main()
                 else if (resultado_auth == 0)
                 {
                     send_message(clientes[i].socket_fd, RESP_LOGIN_FAIL);
-                    printf("Cliente %d fallo autenticacion\n", i + 1);
+                    printf("[HIJO] Cliente %d fallo autenticacion\n", i + 1);
                 }
                 else
                 {
                     send_message(clientes[i].socket_fd, RESP_LOGIN_FAIL);
-                    printf("Error al abrir archivo de credenciales\n");
+                    printf("[HIJO] Error al abrir archivo de credenciales\n");
                 }
             }
             else if (msg.partes == 3 && strcmp(msg.comando, CMD_REGISTER) == 0)
@@ -168,7 +142,7 @@ int main()
                 if (existe == 1)
                 {
                     send_message(clientes[i].socket_fd, RESP_ERROR_USER_EXISTS);
-                    printf("Cliente %d intento registrar un usuario existente: %s\n", i + 1, msg.arg1);
+                    printf("[HIJO] Cliente %d intento registrar un usuario existente: %s\n", i + 1, msg.arg1);
                 }
                 else if (existe == 0)
                 {
@@ -177,18 +151,18 @@ int main()
                     if (registrado == 1)
                     {
                         send_message(clientes[i].socket_fd, RESP_REGISTER_OK);
-                        printf("Cliente %d registro al usuario %s correctamente\n", i + 1, msg.arg1);
+                        printf("[HIJO] Cliente %d registro al usuario %s correctamente\n", i + 1, msg.arg1);
                     }
                     else
                     {
                         send_message(clientes[i].socket_fd, RESP_REGISTER_FAIL);
-                        printf("Error al registrar usuario %s\n", msg.arg1);
+                        printf("[HIJO] Error al registrar usuario %s\n", msg.arg1);
                     }
                 }
                 else
                 {
                     send_message(clientes[i].socket_fd, RESP_REGISTER_FAIL);
-                    printf("Error al abrir archivo de credenciales\n");
+                    printf("[HIJO] Error al abrir archivo de credenciales\n");
                 }
             }
             else if (msg.partes == 2 && strcmp(msg.comando, CMD_SETWORD) == 0)
@@ -217,13 +191,13 @@ int main()
                     {
                         send_message(clientes[i].socket_fd, RESP_WAITING_PLAYER);
                         send_message(clientes[otro].socket_fd, RESP_YOUR_TURN_GUESS);
-                        printf("Jugador %d establecio la palabra secreta\n", i + 1);
+                        printf("[HIJO] Jugador %d establecio la palabra secreta\n", i + 1);
                     }
                     else
                     {
                         send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_WORD);
                         send_message(clientes[i].socket_fd, RESP_YOUR_TURN_SETWORD);
-                        printf("Jugador %d envio una palabra invalida\n", i + 1);
+                        printf("[HIJO] Jugador %d envio una palabra invalida\n", i + 1);
                     }
                 }
             }
@@ -262,7 +236,7 @@ int main()
                         );
 
                         send_message(clientes[i].socket_fd, result_msg);
-                        printf("Resultado enviado al jugador %d: %s\n", i + 1, result_msg);
+                        printf("[HIJO] Resultado enviado al jugador %d: %s\n", i + 1, result_msg);
 
                         if (current_round_over(&game, result))
                         {
@@ -313,19 +287,19 @@ int main()
                                 send_message(clientes[game.rm.setter_id].socket_fd, RESP_YOUR_TURN_SETWORD);
                                 send_message(clientes[game.rm.guesser_id].socket_fd, RESP_WAITING_PLAYER);
 
-                                printf("Preparada la ronda %d\n", game.rm.current_round);
+                                printf("[HIJO] Preparada la ronda %d\n", game.rm.current_round);
                             }
                         }
-                        else 
+                        else
                         {
-                        	send_message(clientes[i].socket_fd, RESP_YOUR_TURN_GUESS);
+                            send_message(clientes[i].socket_fd, RESP_YOUR_TURN_GUESS);
                         }
                     }
                     else
                     {
                         send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_WORD);
                         send_message(clientes[i].socket_fd, RESP_YOUR_TURN_GUESS);
-                        printf("Jugador %d envio un intento invalido\n", i + 1);
+                        printf("[HIJO] Jugador %d envio un intento invalido\n", i + 1);
                     }
                 }
             }
@@ -333,7 +307,7 @@ int main()
             {
                 int otro = (i == 0) ? 1 : 0;
 
-                printf("Cliente %d solicito desconexion\n", i + 1);
+                printf("[HIJO] Cliente %d solicito desconexion\n", i + 1);
                 close(clientes[i].socket_fd);
                 reset_client(&clientes[i]);
                 set_session_state(&sesion, INTERRUPTED);
@@ -349,27 +323,27 @@ int main()
             else if (msg.partes >= 1 && strcmp(msg.comando, CMD_LOGIN) == 0)
             {
                 send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_FORMAT);
-                printf("Cliente %d envio LOGIN con formato invalido\n", i + 1);
+                printf("[HIJO] Cliente %d envio LOGIN con formato invalido\n", i + 1);
             }
             else if (msg.partes >= 1 && strcmp(msg.comando, CMD_REGISTER) == 0)
             {
                 send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_FORMAT);
-                printf("Cliente %d envio REGISTER con formato invalido\n", i + 1);
+                printf("[HIJO] Cliente %d envio REGISTER con formato invalido\n", i + 1);
             }
             else if (msg.partes >= 1 && strcmp(msg.comando, CMD_SETWORD) == 0)
             {
                 send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_FORMAT);
-                printf("Cliente %d envio SETWORD con formato invalido\n", i + 1);
+                printf("[HIJO] Cliente %d envio SETWORD con formato invalido\n", i + 1);
             }
             else if (msg.partes >= 1 && strcmp(msg.comando, CMD_GUESS) == 0)
             {
                 send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_FORMAT);
-                printf("Cliente %d envio GUESS con formato invalido\n", i + 1);
+                printf("[HIJO] Cliente %d envio GUESS con formato invalido\n", i + 1);
             }
             else
             {
                 send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_COMMAND);
-                printf("Cliente %d envio comando invalido\n", i + 1);
+                printf("[HIJO] Cliente %d envio comando invalido\n", i + 1);
             }
         }
     }
@@ -384,9 +358,90 @@ int main()
     }
 
     set_session_state(&sesion, ENDED);
+    printf("[HIJO] Sesion finalizada\n");
+}
+
+int main()
+{
+    int servidor_fd;
+    int i;
+
+    servidor_fd = create_server();
+    if (servidor_fd < 0)
+    {
+        return 1;
+    }
+
+    while (1)
+    {
+        Client clientes[MAX_CLIENTES];
+        pid_t pid;
+
+        while (waitpid(-1, NULL, WNOHANG) > 0)
+        {
+        }
+
+        for (i = 0; i < MAX_CLIENTES; i++)
+        {
+            init_client(&clientes[i]);
+        }
+
+        for (i = 0; i < MAX_CLIENTES; i++)
+        {
+            int socket_cliente;
+
+            printf("Esperando al cliente %d de la nueva sesion...\n", i + 1);
+            socket_cliente = accept_client(servidor_fd);
+
+            if (socket_cliente < 0)
+            {
+                close(servidor_fd);
+                return 1;
+            }
+
+            set_client_connected(&clientes[i], socket_cliente);
+        }
+
+        printf("Dos clientes conectados. Creando proceso hijo para la sesion...\n");
+
+        pid = fork();
+
+        if (pid < 0)
+        {
+            perror("Error en fork");
+
+            for (i = 0; i < MAX_CLIENTES; i++)
+            {
+                if (clientes[i].conectado)
+                {
+                    close(clientes[i].socket_fd);
+                    reset_client(&clientes[i]);
+                }
+            }
+
+            continue;
+        }
+
+        if (pid == 0)
+        {
+            close(servidor_fd);
+            run_session(clientes);
+            exit(0);
+        }
+        else
+        {
+            for (i = 0; i < MAX_CLIENTES; i++)
+            {
+                if (clientes[i].conectado)
+                {
+                    close(clientes[i].socket_fd);
+                    reset_client(&clientes[i]);
+                }
+            }
+            printf("[PADRE] Sesion delegada al hijo. Esperando nuevos clientes...\n");
+        }
+    }
 
     close(servidor_fd);
-    printf("Servidor finalizado\n");
-
     return 0;
 }
