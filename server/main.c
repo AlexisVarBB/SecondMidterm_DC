@@ -2,8 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/select.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+
 #include "server.h"
 #include "protocol.h"
 #include "config.h"
@@ -232,8 +235,7 @@ static void run_session(Client clientes[])
                             BUFFER_SIZE,
                             "%s %d %d %d %d %d",
                             RESP_RESULT_PREFIX,
-                            result[0], result[1], result[2], result[3], result[4]
-                        );
+                            result[0], result[1], result[2], result[3], result[4]);
 
                         send_message(clientes[i].socket_fd, result_msg);
                         printf("[HIJO] Resultado enviado al jugador %d: %s\n", i + 1, result_msg);
@@ -364,7 +366,11 @@ static void run_session(Client clientes[])
 int main()
 {
     int servidor_fd;
+    Client clientes[MAX_CLIENTES];
     int i;
+
+    /* Evita zombies de hijos terminados */
+    signal(SIGCHLD, SIG_IGN);
 
     servidor_fd = create_server();
     if (servidor_fd < 0)
@@ -372,43 +378,41 @@ int main()
         return 1;
     }
 
+    printf("[PADRE] Servidor principal listo en puerto %d\n", PUERTO);
+
     while (1)
     {
-        Client clientes[MAX_CLIENTES];
-        pid_t pid;
-
-        while (waitpid(-1, NULL, WNOHANG) > 0)
-        {
-        }
-
+        /* Reiniciar arreglo de clientes para una nueva sesión */
         for (i = 0; i < MAX_CLIENTES; i++)
         {
             init_client(&clientes[i]);
         }
 
+        /* Emparejar 2 clientes */
         for (i = 0; i < MAX_CLIENTES; i++)
         {
             int socket_cliente;
 
-            printf("Esperando al cliente %d de la nueva sesion...\n", i + 1);
-            socket_cliente = accept_client(servidor_fd);
+            printf("[PADRE] Esperando al cliente %d de la nueva sesión...\n", i + 1);
 
+            socket_cliente = accept_client(servidor_fd);
             if (socket_cliente < 0)
             {
+                perror("[PADRE] Error aceptando cliente");
                 close(servidor_fd);
                 return 1;
             }
 
             set_client_connected(&clientes[i], socket_cliente);
+            printf("[PADRE] Cliente %d asignado a la sesión actual\n", i + 1);
         }
 
-        printf("Dos clientes conectados. Creando proceso hijo para la sesion...\n");
-
-        pid = fork();
+        /* Crear proceso hijo para atender esta sesión */
+        pid_t pid = fork();
 
         if (pid < 0)
         {
-            perror("Error en fork");
+            perror("[PADRE] Error en fork");
 
             for (i = 0; i < MAX_CLIENTES; i++)
             {
@@ -424,12 +428,12 @@ int main()
 
         if (pid == 0)
         {
+            /* HIJO: atiende la sesión */
             close(servidor_fd);
+
+            printf("[HIJO] Iniciando sesión de juego\n");
             run_session(clientes);
-            exit(0);
-        }
-        else
-        {
+
             for (i = 0; i < MAX_CLIENTES; i++)
             {
                 if (clientes[i].conectado)
@@ -438,7 +442,23 @@ int main()
                     reset_client(&clientes[i]);
                 }
             }
-            printf("[PADRE] Sesion delegada al hijo. Esperando nuevos clientes...\n");
+
+            printf("[HIJO] Proceso de sesión terminado\n");
+            exit(0);
+        }
+        else
+        {
+            /* PADRE: cierra sus copias de los sockets y vuelve a esperar otra sesión */
+            printf("[PADRE] Sesión delegada al hijo PID=%d\n", pid);
+
+            for (i = 0; i < MAX_CLIENTES; i++)
+            {
+                if (clientes[i].conectado)
+                {
+                    close(clientes[i].socket_fd);
+                    reset_client(&clientes[i]);
+                }
+            }
         }
     }
 
