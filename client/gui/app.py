@@ -5,7 +5,9 @@ from gui.register_view import RegisterView
 from gui.waiting_view import WaitingView
 from gui.word_input_view import WordInputView
 from gui.main_wordle_view import MainWordleView
+from gui.end_game import EndGameView
 from listener import ServerListener
+
 
 class App(tk.Tk):
     def __init__(self):
@@ -19,6 +21,7 @@ class App(tk.Tk):
         self.listener = ServerListener(self)
         self.connected = False
         self.current_view = None
+        self.game_finished = False
 
         self.show_login()
 
@@ -29,6 +32,7 @@ class App(tk.Tk):
 
     def show_login(self):
         self.clear_view()
+        self.game_finished = False
         self.current_view = LoginView(self)
         self.current_view.pack(fill="both", expand=True)
 
@@ -69,7 +73,6 @@ class App(tk.Tk):
         self.after(0, lambda: self.handle_server_message(message))
 
     def handle_server_message(self, message):
-
         if message == "WAITING_PLAYER":
             self.show_waiting("Esperando al otro jugador...")
 
@@ -78,29 +81,45 @@ class App(tk.Tk):
                 self.current_view.set_status("Juego listo")
 
         elif message == "OPPONENT_DISCONNECTED":
-            self.close_connection()
-            self.show_login()
+            if not self.game_finished:
+                self.close_connection()
+                self.show_login()
 
         elif message == "YOUR_TURN_SETWORD":
-           self.show_word_input()
-           if self.current_view is not None and hasattr(self.current_view, "handle_server_message"):
-            self.current_view.handle_server_message(message)
+            if not isinstance(self.current_view, WordInputView):
+                self.show_word_input()
+
+            if self.current_view is not None and hasattr(self.current_view, "handle_server_message"):
+                self.current_view.handle_server_message(message)
 
         elif message == "YOUR_TURN_GUESS":
-             self.show_main_wordle()
-             if self.current_view is not None and hasattr(self.current_view, "handle_server_message"):
-               self.current_view.handle_server_message(message)
+            if not isinstance(self.current_view, MainWordleView):
+                self.show_main_wordle()
+
+            if self.current_view is not None and hasattr(self.current_view, "handle_server_message"):
+                self.current_view.handle_server_message(message)
+                
+        elif message.startswith("GAME_OVER"):
+            self.game_finished = True
+            self.show_end_game()
+
+            if self.current_view is not None and hasattr(self.current_view, "handle_server_message"):
+                self.current_view.handle_server_message(message)
 
         elif self.current_view is not None and hasattr(self.current_view, "handle_server_message"):
             self.current_view.handle_server_message(message)
 
     def show_word_input(self):
-      
-      self.clear_view()
-      self.current_view = WordInputView(self)
-      self.current_view.pack(fill="both", expand=True)
+        self.clear_view()
+        self.current_view = WordInputView(self)
+        self.current_view.pack(fill="both", expand=True)
 
     def show_main_wordle(self):
-      self.clear_view()
-      self.current_view = MainWordleView(self)
-      self.current_view.pack(fill="both", expand=True)
+        self.clear_view()
+        self.current_view = MainWordleView(self)
+        self.current_view.pack(fill="both", expand=True)
+        
+    def show_end_game(self):
+        self.clear_view()
+        self.current_view = EndGameView(self)
+        self.current_view.pack(fill="both", expand=True)

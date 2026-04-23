@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import messagebox
 
 class LoginView(tk.Frame):
     def __init__(self, master):
@@ -7,6 +8,18 @@ class LoginView(tk.Frame):
         self.build_ui()
     
     def build_ui(self):
+        top_frame = tk.Frame(self)
+        top_frame.pack(fill="x", pady=10, padx=10)
+        
+        btn_about = tk.Button(
+            top_frame,
+            text="About",
+            width=10,
+            command=self.mostrar_acerca_de
+        )
+        btn_about.pack(side="right")
+        
+        
         titulo = tk.Label(self, text="LOGIN", font=("Arial", 20, "bold"))
         titulo.pack(pady=30)
 
@@ -36,6 +49,26 @@ class LoginView(tk.Frame):
 
         self.lbl_state = tk.Label(self, text="", font=("Arial", 12), fg="red")
         self.lbl_state.pack(pady=10)
+        
+    def mostrar_acerca_de(self):
+        texto = (
+            "Team members:\n"
+            "Alberto Stephen Dubin Hernandez\n"
+            "Jorge Enrique Ruiz Liera\n"
+            "Alexis Vargas Moreno\n\n"
+            "Course: Distributed Computing\n\n"
+            "Professor: Dr. Juan Carlos López Pimentel\n\n"
+            "How to play and how to win:\n"
+            "Two players participate. In round 1, Player 1 enters a secret 5-letter word "
+            "and Player 2 has up to 6 attempts to guess it. In round 2, roles switch: "
+            "Player 2 enters a secret word and Player 1 guesses. After each guess, the "
+            "server returns feedback for each letter. Green means correct letter in the "
+            "correct position, yellow means the letter exists but is in a different position, "
+            "and gray means the letter is not in the word. At the end, the game shows whether "
+            "both players guessed correctly, only one did, or neither did."
+        )
+
+        messagebox.showinfo("About", texto)
 
     def login(self):
         usuario = self.entry_usuario.get().strip()
