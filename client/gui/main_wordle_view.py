@@ -1,9 +1,10 @@
 import tkinter as tk
+from tkinter import font as tkfont
 
 
 class MainWordleView(tk.Frame):
     def __init__(self, master):
-        super().__init__(master)
+        super().__init__(master, bg="#7EC8E3")
         self.master = master
         self.row_actual = 0
         self.ultimo_guess = ""
@@ -11,122 +12,142 @@ class MainWordleView(tk.Frame):
         self.build_ui()
 
     def build_ui(self):
-        titulo = tk.Label(self, text="WORDLE", font=("Arial", 20, "bold"))
-        titulo.pack(pady=20)
+        
+        card = tk.Frame(self, bg="#B8D4E8", relief="flat",
+                        highlightbackground="#5AABCC", highlightthickness=3)
+        card.place(relx=0.5, rely=0.5, anchor="center")
 
-        self.lbl_state = tk.Label(
-            self,
-            text="Esperando turno...",
-            font=("Arial", 12),
-            fg="blue"
-        )
-        self.lbl_state.pack(pady=10)
+        
+        try:
+            pixel_font = tkfont.Font(family="Press Start 2P", size=18, weight="bold")
+        except Exception:
+            pixel_font = tkfont.Font(family="Courier", size=18, weight="bold")
 
-        tablero_frame = tk.Frame(self)
-        tablero_frame.pack(pady=15)
+        status_font = tkfont.Font(family="Segoe UI", size=11)
+        cell_font   = tkfont.Font(family="Courier New", size=16, weight="bold")
+        entry_font  = tkfont.Font(family="Courier New", size=14, weight="bold")
+        button_font = tkfont.Font(family="Segoe UI", size=11)
 
-        # CAMBIO: ahora son 6 filas, no 5, para coincidir con los 6 intentos del servidor
+        
+        tk.Label(card, text="WORDLE", font=pixel_font,
+                 bg="#B8D4E8", fg="#1a3a50").pack(padx=50, pady=(24, 8))
+
+        # Estado
+        self.lbl_state = tk.Label(card, text="Esperando turno...",
+                                  font=status_font, bg="#B8D4E8", fg="#185FA5")
+        self.lbl_state.pack(pady=(0, 12))
+
+       
+        tablero_frame = tk.Frame(card, bg="#B8D4E8")
+        tablero_frame.pack(padx=30, pady=(0, 14))
+
         for i in range(6):
             fila = []
             for j in range(5):
                 celda = tk.Label(
-                    tablero_frame,
-                    text="",
-                    width=4,
-                    height=2,
-                    font=("Arial", 18, "bold"),
-                    relief="solid",
-                    borderwidth=1,
-                    bg="white"
+                    tablero_frame, text="", width=3, height=1,
+                    font=cell_font, bg="#daeaf5", fg="#1a3a50",
+                    relief="flat",
+                    highlightbackground="#5AABCC", highlightthickness=2
                 )
                 celda.grid(row=i, column=j, padx=4, pady=4)
                 fila.append(celda)
             self.celdas.append(fila)
 
-        input_frame = tk.Frame(self)
-        input_frame.pack(pady=20)
+        
+        input_frame = tk.Frame(card, bg="#B8D4E8")
+        input_frame.pack(pady=(0, 14))
 
         self.entry_guess = tk.Entry(
-            input_frame,
-            width=15,
-            font=("Arial", 16),
-            justify="center",
+            input_frame, width=8, font=entry_font, justify="center",
+            bg="#daeaf5", fg="#1a3a50", insertbackground="#1a3a50",
+            relief="flat", highlightbackground="#5AABCC", highlightthickness=2,
             state="disabled"
         )
-        self.entry_guess.grid(row=0, column=0, padx=10)
-
-        # NUEVO: permite enviar el intento presionando Enter
-        self.entry_guess.bind("<Return>", lambda event: self.enviar_guess())
+        self.entry_guess.grid(row=0, column=0, padx=(0, 10))
+        self.entry_guess.bind("<Return>", lambda e: self.enviar_guess())
+        self.entry_guess.bind("<KeyRelease>", self._mayusculas)
 
         self.btn_enviar = tk.Button(
-            input_frame,
-            text="Enviar intento",
-            width=15,
-            command=self.enviar_guess,
+            input_frame, text="Enviar intento",
+            font=button_font, width=14,
+            bg="#C9A97A", fg="#3d2200",
+            activebackground="#B8915F", activeforeground="#3d2200",
+            relief="flat", bd=0,
+            highlightbackground="#9A7040", highlightthickness=2,
+            cursor="hand2", command=self.enviar_guess,
             state="disabled"
         )
-        self.btn_enviar.grid(row=0, column=1, padx=10)
+        self.btn_enviar.grid(row=0, column=1)
+
+       
+        self.lbl_error = tk.Label(card, text="", font=status_font,
+                                  bg="#B8D4E8", fg="#c0392b")
+        self.lbl_error.pack(pady=(0, 20))
+
+   
+
+    def _mayusculas(self, event=None):
+        val = self.entry_guess.get().upper()
+        self.entry_guess.delete(0, tk.END)
+        self.entry_guess.insert(0, val)
+
+    def _set_status(self, texto, color="#185FA5"):
+        self.lbl_state.config(text=texto, fg=color)
+
+    def _set_error(self, texto, color="#c0392b"):
+        self.lbl_error.config(text=texto, fg=color)
+
+  
 
     def habilitar_tablero(self):
-        # NUEVO: evita habilitar más intentos si ya se llenaron las 6 filas
         if self.row_actual >= 6:
             return
-
         self.entry_guess.config(state="normal")
-        self.btn_enviar.config(state="normal")
-
-        # NUEVO: deja el cursor listo para escribir
+        self.btn_enviar.config(state="normal", bg="#C9A97A", cursor="hand2")
         self.entry_guess.focus_set()
-
-        self.lbl_state.config(text="Es tu turno de adivinar", fg="green")
+        self._set_status("Es tu turno de adivinar", "#1a5c30")
+        self._set_error("")
 
     def deshabilitar_tablero(self):
         self.entry_guess.config(state="disabled")
-        self.btn_enviar.config(state="disabled")
+        self.btn_enviar.config(state="disabled", bg="#d6c9b8", cursor="arrow")
+
+   
 
     def enviar_guess(self):
-        # CAMBIO: ya no se convierte aquí a mayúsculas para enviarla;
-        # el servidor se encarga de normalizar y validar
         palabra = self.entry_guess.get().strip()
 
         if palabra == "":
-            self.lbl_state.config(text="Ingresa una palabra", fg="red")
+            self._set_error("Ingresa una palabra")
             return
-
-        # CAMBIO: se deja solo una validación mínima visual de longitud
         if len(palabra) != 5:
-            self.lbl_state.config(text="La palabra debe tener 5 caracteres", fg="red")
+            self._set_error("La palabra debe tener 5 caracteres")
             return
 
-        # CAMBIO: se guarda en mayúsculas solo para pintar bonito el tablero,
-        # no para validar ni para decidir lógica del juego
         self.ultimo_guess = palabra.upper()
-
-        mensaje = f"GUESS {palabra}"
-        self.master.send_server(mensaje)
-
-        self.lbl_state.config(text="Enviando intento...", fg="blue")
+        self.master.send_server(f"GUESS {palabra}")
+        self._set_status("Enviando intento...", "#185FA5")
+        self._set_error("")
         self.entry_guess.delete(0, tk.END)
-
-        # NUEVO: se deshabilita mientras espera respuesta del servidor
         self.deshabilitar_tablero()
 
     def pintar_resultado(self, palabra, resultados):
-        # CAMBIO: ahora el límite también es 6 filas
         if self.row_actual >= 6:
             return
 
+        colores = {
+            2: ("#7dcba0", "#3a8f62", "#0d3320"),   
+            1: ("#e8d87a", "#b09a20", "#3d2e00"),   
+            0: ("#a8b8c4", "#6a8494", "#1a3a50"),   
+        }
+
         for j in range(min(5, len(palabra))):
-            color = "lightgray"
-
-            if resultados[j] == 2:
-                color = "lightgreen"
-            elif resultados[j] == 1:
-                color = "khaki"
-
+            bg, border, fg = colores.get(resultados[j], colores[0])
             self.celdas[self.row_actual][j].config(
                 text=palabra[j],
-                bg=color
+                bg=bg, fg=fg,
+                highlightbackground=border
             )
 
         self.row_actual += 1
@@ -137,37 +158,29 @@ class MainWordleView(tk.Frame):
 
         elif message == "WAITING_PLAYER":
             self.deshabilitar_tablero()
-            self.lbl_state.config(text="Esperando al otro jugador...", fg="blue")
+            self._set_status("Esperando al otro jugador...", "#185FA5")
 
         elif message == "ERROR INVALID_WORD":
-            self.lbl_state.config(text="Palabra inválida", fg="red")
+            self.habilitar_tablero()
+            self._set_error("Palabra inválida")
 
         elif message == "ERROR NOT_YOUR_TURN":
-            # NUEVO: se asegura que si no es tu turno, quede bloqueado el input
             self.deshabilitar_tablero()
-            self.lbl_state.config(text="No es tu turno", fg="red")
+            self._set_error("No es tu turno")
 
         elif message == "ROUND_END":
-            # NUEVO: maneja explícitamente el final de ronda
             self.deshabilitar_tablero()
-            self.lbl_state.config(text="La ronda terminó", fg="blue")
+            self._set_status("La ronda terminó", "#185FA5")
 
         elif message.startswith("GAME_OVER"):
-            # NUEVO: al terminar el juego, se bloquea el tablero
             self.deshabilitar_tablero()
 
         elif message.startswith("RESULT"):
             partes = message.split()
-
             if len(partes) == 6:
                 try:
                     resultados = list(map(int, partes[1:6]))
-                    palabra = self.ultimo_guess
-                    self.pintar_resultado(palabra, resultados)
-
-                    # CAMBIO: ya no se habilita aquí automáticamente;
-                    # se espera a que el servidor mande YOUR_TURN_GUESS otra vez
-                    self.lbl_state.config(text="Resultado recibido", fg="blue")
-
+                    self.pintar_resultado(self.ultimo_guess, resultados)
+                    self._set_status("Resultado recibido", "#185FA5")
                 except ValueError:
-                    self.lbl_state.config(text="Resultado inválido recibido", fg="red")
+                    self._set_error("Resultado inválido recibido")

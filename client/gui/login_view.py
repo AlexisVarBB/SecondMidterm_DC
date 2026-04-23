@@ -1,55 +1,129 @@
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import font as tkfont
+
 
 class LoginView(tk.Frame):
     def __init__(self, master):
-        super().__init__(master)
+        super().__init__(master, bg="#7EC8E3")
         self.master = master
         self.build_ui()
-    
+
     def build_ui(self):
-        top_frame = tk.Frame(self)
-        top_frame.pack(fill="x", pady=10, padx=10)
-        
-        btn_about = tk.Button(
-            top_frame,
-            text="About",
-            width=10,
-            command=self.mostrar_acerca_de
+        card = tk.Frame(
+            self,
+            bg="#B8D4E8",
+            relief="flat",
+            highlightbackground="#5AABCC",
+            highlightthickness=3
         )
-        btn_about.pack(side="right")
-        
-        
-        titulo = tk.Label(self, text="LOGIN", font=("Arial", 20, "bold"))
-        titulo.pack(pady=30)
+        card.place(relx=0.5, rely=0.5, anchor="center")
 
-        form_frame = tk.Frame(self)
-        form_frame.pack(pady=20)
+        try:
+            pixel_font = tkfont.Font(family="Press Start 2P", size=13, weight="bold")
+        except Exception:
+            pixel_font = tkfont.Font(family="Courier", size=13, weight="bold")
 
-        lbl_usuario = tk.Label(form_frame, text="Usuario:", font=("Arial", 12))
-        lbl_usuario.grid(row=0, column=0, padx=10, pady=10, sticky="e")
+        label_font = tkfont.Font(family="Segoe UI", size=11, weight="bold")
+        entry_font = tkfont.Font(family="Segoe UI", size=11)
+        button_font = tkfont.Font(family="Segoe UI", size=11)
+        status_font = tkfont.Font(family="Segoe UI", size=10)
 
-        self.entry_usuario = tk.Entry(form_frame, width=25, font=("Arial", 12))
-        self.entry_usuario.grid(row=0, column=1, padx=10, pady=10)
+        titulo = tk.Label(
+            card,
+            text="LOGIN",
+            font=pixel_font,
+            bg="#B8D4E8",
+            fg="#1a3a50",
+            wraplength=280,
+            justify="center"
+        )
+        titulo.pack(padx=50, pady=(28, 20))
 
-        lbl_password = tk.Label(form_frame, text="Contraseña:", font=("Arial", 12))
-        lbl_password.grid(row=1, column=0, padx=10, pady=10, sticky="e")
+        form = tk.Frame(card, bg="#B8D4E8")
+        form.pack(padx=40, pady=(0, 14))
 
-        self.entry_password = tk.Entry(form_frame, width=25, font=("Arial", 12), show="*")
-        self.entry_password.grid(row=1, column=1, padx=10, pady=10)
+        tk.Label(
+            form,
+            text="Usuario:",
+            font=label_font,
+            bg="#B8D4E8",
+            fg="#1a3a50",
+            anchor="e"
+        ).grid(row=0, column=0, padx=(0, 10), pady=8, sticky="e")
 
-        botones_frame = tk.Frame(self)
-        botones_frame.pack(pady=20)
+        self.entry_usuario = tk.Entry(
+            form,
+            width=22,
+            font=entry_font,
+            bg="#daeaf5",
+            fg="#1a3a50",
+            insertbackground="#1a3a50",
+            relief="flat",
+            highlightbackground="#5AABCC",
+            highlightthickness=2
+        )
+        self.entry_usuario.grid(row=0, column=1, pady=8)
 
-        btn_login = tk.Button(botones_frame, text="Login", font=("Arial", 12), width=15, command=self.login)
-        btn_login.grid(row=0, column=0, padx=10)
+        tk.Label(
+            form,
+            text="Contraseña:",
+            font=label_font,
+            bg="#B8D4E8",
+            fg="#1a3a50",
+            anchor="e"
+        ).grid(row=1, column=0, padx=(0, 10), pady=8, sticky="e")
 
-        btn_register = tk.Button(botones_frame, text="Register", font=("Arial", 12), width=15, command=self.go_register)
-        btn_register.grid(row=0, column=1, padx=10)
+        self.entry_password = tk.Entry(
+            form,
+            width=22,
+            font=entry_font,
+            show="*",
+            bg="#daeaf5",
+            fg="#1a3a50",
+            insertbackground="#1a3a50",
+            relief="flat",
+            highlightbackground="#5AABCC",
+            highlightthickness=2
+        )
+        self.entry_password.grid(row=1, column=1, pady=8)
 
-        self.lbl_state = tk.Label(self, text="", font=("Arial", 12), fg="red")
-        self.lbl_state.pack(pady=10)
-        
+        btn_frame = tk.Frame(card, bg="#B8D4E8")
+        btn_frame.pack(pady=(4, 10))
+
+        def make_btn(parent, text, cmd, secondary=False):
+            bg = "#d6c9b8" if secondary else "#C9A97A"
+            abg = "#c4b49e" if secondary else "#B8915F"
+            return tk.Button(
+                parent,
+                text=text,
+                font=button_font,
+                width=13,
+                command=cmd,
+                bg=bg,
+                fg="#3d2200",
+                activebackground=abg,
+                activeforeground="#3d2200",
+                relief="flat",
+                bd=0,
+                highlightbackground="#9A7040",
+                highlightthickness=2,
+                cursor="hand2"
+            )
+
+        make_btn(btn_frame, "Login", self.login).grid(row=0, column=0, padx=8)
+        make_btn(btn_frame, "Registro", self.go_register, secondary=True).grid(row=0, column=1, padx=8)
+        make_btn(btn_frame, "About", self.mostrar_acerca_de, secondary=True).grid(row=1, column=0, columnspan=2, pady=(10, 0))
+
+        self.lbl_state = tk.Label(
+            card,
+            text="",
+            font=status_font,
+            bg="#B8D4E8",
+            fg="#c0392b"
+        )
+        self.lbl_state.pack(pady=(8, 20))
+
     def mostrar_acerca_de(self):
         texto = (
             "Team members:\n"
@@ -75,27 +149,29 @@ class LoginView(tk.Frame):
         password = self.entry_password.get().strip()
 
         if usuario == "" or password == "":
-            self.lbl_state.config(text="Completa usuario y contraseña")
+            self.lbl_state.config(text="Completa usuario y contraseña", fg="#c0392b")
             return
 
         if not self.master.ensure_connection():
-            self.lbl_state.config(text="No se pudo conectar al servidor")
+            self.lbl_state.config(text="No se pudo conectar al servidor", fg="#c0392b")
             return
 
         mensaje = f"LOGIN {usuario} {password}"
         self.master.send_server(mensaje)
 
-        self.lbl_state.config(text="Enviando login...", fg="blue")
+        self.lbl_state.config(text="Enviando login...", fg="#185FA5")
 
     def handle_server_message(self, respuesta):
-        if respuesta == "LOGIN_OK":
-            self.lbl_state.config(text="Login exitoso", fg="green")
-        elif respuesta == "LOGIN_FAIL":
-            self.lbl_state.config(text="Credenciales incorrectas", fg="red")
-        elif respuesta == "ERROR INVALID_FORMAT":
-            self.lbl_state.config(text="Formato inválido", fg="red")
-        elif respuesta == "ERROR INVALID_COMMAND":
-            self.lbl_state.config(text="Comando inválido", fg="red")
+        mensajes = {
+            "LOGIN_OK": ("Login exitoso", "#1a5c30"),
+            "LOGIN_FAIL": ("Credenciales incorrectas", "#c0392b"),
+            "ERROR INVALID_FORMAT": ("Formato inválido", "#c0392b"),
+            "ERROR INVALID_COMMAND": ("Comando inválido", "#c0392b"),
+        }
+
+        if respuesta in mensajes:
+            texto, color = mensajes[respuesta]
+            self.lbl_state.config(text=texto, fg=color)
 
     def go_register(self):
         self.master.show_register()
