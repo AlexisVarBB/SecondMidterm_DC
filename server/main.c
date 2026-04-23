@@ -18,12 +18,14 @@
 
 static void run_session(Client clientes[])
 {
+    /* Estado general de la sesión y del juego */
     Session sesion;
     GameState game;
     char buffer[BUFFER_SIZE];
     int i;
     int sesion_activa = 1;
 
+    /* Inicializa sesión y lógica del juego */
     init_session(&sesion);
     init_game(&game);
 
@@ -31,6 +33,7 @@ static void run_session(Client clientes[])
 
     printf("\n[HIJO] Los dos clientes ya están conectados\n");
 
+    /* Ciclo principal de la partida entre los 2 clientes */
     while (sesion_activa)
     {
         for (i = 0; i < MAX_CLIENTES; i++)
@@ -39,11 +42,13 @@ static void run_session(Client clientes[])
             int resultado_auth;
             ParsedMessage msg;
 
+            /* Salta clientes no conectados */
             if (!clientes[i].conectado)
             {
                 continue;
             }
 
+            /* Durante el juego, solo lee al jugador cuyo turno corresponde */
             if (sesion.estado == ACTIVE)
             {
                 int jugador_esperado;
@@ -63,8 +68,10 @@ static void run_session(Client clientes[])
                 }
             }
 
+            /* Recibe mensaje del cliente actual */
             leidos = receive_message(clientes[i].socket_fd, buffer, BUFFER_SIZE);
 
+            /* Si un cliente se desconecta, se interrumpe la sesión */
             if (leidos == 0)
             {
                 int otro = (i == 0) ? 1 : 0;
@@ -83,6 +90,7 @@ static void run_session(Client clientes[])
                 break;
             }
 
+            /* Si ocurre error al recibir, termina la sesión */
             if (leidos < 0)
             {
                 printf("[HIJO] Error al recibir mensaje del cliente %d\n", i + 1);
@@ -93,8 +101,10 @@ static void run_session(Client clientes[])
 
             printf("[HIJO] Mensaje del cliente %d: %s\n", i + 1, buffer);
 
+            /* Convierte el texto recibido en comando + argumentos */
             parse_message(buffer, &msg);
 
+            /* LOGIN: valida credenciales y, si ambos entran, arranca la partida */
             if (msg.partes == 3 && strcmp(msg.comando, CMD_LOGIN) == 0)
             {
                 resultado_auth = validate_credentials(RUTA_USERS, msg.arg1, msg.arg2);
@@ -111,6 +121,7 @@ static void run_session(Client clientes[])
                         send_message(clientes[0].socket_fd, RESP_START_GAME);
                         send_message(clientes[1].socket_fd, RESP_START_GAME);
 
+                        /* Inicia ronda 1: jugador 0 pone palabra, jugador 1 adivina */
                         start_round(&game.rm, 0, 1);
                         set_session_state(&sesion, ACTIVE);
 
@@ -135,6 +146,8 @@ static void run_session(Client clientes[])
                     printf("[HIJO] Error al abrir archivo de credenciales\n");
                 }
             }
+
+            /* REGISTER: registra nuevo usuario si no existe */
             else if (msg.partes == 3 && strcmp(msg.comando, CMD_REGISTER) == 0)
             {
                 int existe;
@@ -168,6 +181,8 @@ static void run_session(Client clientes[])
                     printf("[HIJO] Error al abrir archivo de credenciales\n");
                 }
             }
+
+            /* SETWORD: solo el setter puede registrar la palabra secreta */
             else if (msg.partes == 2 && strcmp(msg.comando, CMD_SETWORD) == 0)
             {
                 if (!clientes[i].autenticado)
@@ -190,6 +205,7 @@ static void run_session(Client clientes[])
                 {
                     int otro = game.rm.guesser_id;
 
+                    /* Guarda palabra secreta válida y habilita al guesser */
                     if (set_secret_word(&game, msg.arg1))
                     {
                         send_message(clientes[i].socket_fd, RESP_WAITING_PLAYER);
@@ -198,12 +214,15 @@ static void run_session(Client clientes[])
                     }
                     else
                     {
+                        /* Si la palabra es inválida, el mismo setter la vuelve a intentar */
                         send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_WORD);
                         send_message(clientes[i].socket_fd, RESP_YOUR_TURN_SETWORD);
                         printf("[HIJO] Jugador %d envio una palabra invalida\n", i + 1);
                     }
                 }
             }
+
+            /* GUESS: solo el jugador que adivina puede intentar */
             else if (msg.partes == 2 && strcmp(msg.comando, CMD_GUESS) == 0)
             {
                 if (!clientes[i].autenticado)
@@ -228,6 +247,7 @@ static void run_session(Client clientes[])
                     char result_msg[BUFFER_SIZE];
                     int guessed_correctly;
 
+                    /* Procesa el intento y genera feedback tipo Wordle */
                     if (process_guess(&game, msg.arg1, result))
                     {
                         snprintf(
@@ -240,6 +260,7 @@ static void run_session(Client clientes[])
                         send_message(clientes[i].socket_fd, result_msg);
                         printf("[HIJO] Resultado enviado al jugador %d: %s\n", i + 1, result_msg);
 
+                        /* Si la ronda termina, registra el resultado y decide si sigue otra ronda o acaba el juego */
                         if (current_round_over(&game, result))
                         {
                             guessed_correctly = current_round_won(result);
@@ -250,6 +271,7 @@ static void run_session(Client clientes[])
                             send_message(clientes[0].socket_fd, RESP_ROUND_END);
                             send_message(clientes[1].socket_fd, RESP_ROUND_END);
 
+                            /* Si ya acabaron las 2 rondas, calcula el resultado final */
                             if (game_over(&game))
                             {
                                 GameResult final;
@@ -284,6 +306,7 @@ static void run_session(Client clientes[])
                             }
                             else
                             {
+                                /* Si no ha acabado todo, prepara la siguiente ronda e intercambia roles */
                                 prepare_next_round(&game);
 
                                 send_message(clientes[game.rm.setter_id].socket_fd, RESP_YOUR_TURN_SETWORD);
@@ -294,17 +317,21 @@ static void run_session(Client clientes[])
                         }
                         else
                         {
+                            /* Si no terminó la ronda, el mismo jugador puede volver a intentar */
                             send_message(clientes[i].socket_fd, RESP_YOUR_TURN_GUESS);
                         }
                     }
                     else
                     {
+                        /* Si el intento es inválido, no pierde turno, solo vuelve a intentarlo */
                         send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_WORD);
                         send_message(clientes[i].socket_fd, RESP_YOUR_TURN_GUESS);
                         printf("[HIJO] Jugador %d envio un intento invalido\n", i + 1);
                     }
                 }
             }
+
+            /* DISCONNECT: si uno se sale, la sesión se corta */
             else if (msg.partes == 1 && strcmp(msg.comando, CMD_DISCONNECT) == 0)
             {
                 int otro = (i == 0) ? 1 : 0;
@@ -322,6 +349,8 @@ static void run_session(Client clientes[])
                 sesion_activa = 0;
                 break;
             }
+
+            /* Validaciones de formato para comandos conocidos */
             else if (msg.partes >= 1 && strcmp(msg.comando, CMD_LOGIN) == 0)
             {
                 send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_FORMAT);
@@ -342,6 +371,8 @@ static void run_session(Client clientes[])
                 send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_FORMAT);
                 printf("[HIJO] Cliente %d envio GUESS con formato invalido\n", i + 1);
             }
+
+            /* Si no coincide con nada, se marca como comando inválido */
             else
             {
                 send_message(clientes[i].socket_fd, RESP_ERROR_INVALID_COMMAND);
@@ -350,6 +381,7 @@ static void run_session(Client clientes[])
         }
     }
 
+    /* Al terminar la sesión, el hijo cierra sockets y limpia clientes */
     for (i = 0; i < MAX_CLIENTES; i++)
     {
         if (clientes[i].conectado)
@@ -369,9 +401,10 @@ int main()
     Client clientes[MAX_CLIENTES];
     int i;
 
-    /* Evita zombies de hijos terminados */
+    /* Ignora hijos terminados para evitar procesos zombie */
     signal(SIGCHLD, SIG_IGN);
 
+    /* Crea el servidor principal */
     servidor_fd = create_server();
     if (servidor_fd < 0)
     {
@@ -380,15 +413,16 @@ int main()
 
     printf("[PADRE] Servidor principal listo en puerto %d\n", PUERTO);
 
+    /* El padre siempre sigue vivo esperando nuevas sesiones */
     while (1)
     {
-        /* Reiniciar arreglo de clientes para una nueva sesión */
+        /* Reinicia la estructura de clientes para una nueva partida */
         for (i = 0; i < MAX_CLIENTES; i++)
         {
             init_client(&clientes[i]);
         }
 
-        /* Emparejar 2 clientes */
+        /* Empareja a 2 clientes para formar una sesión */
         for (i = 0; i < MAX_CLIENTES; i++)
         {
             int socket_cliente;
@@ -407,11 +441,12 @@ int main()
             printf("[PADRE] Cliente %d asignado a la sesión actual\n", i + 1);
         }
 
-        /* Crear proceso hijo para atender esta sesión */
+        /* Crea un proceso hijo para manejar esta partida completa */
         pid_t pid = fork();
 
         if (pid < 0)
         {
+            /* Si fork falla, libera sockets de esa sesión y sigue esperando otra */
             perror("[PADRE] Error en fork");
 
             for (i = 0; i < MAX_CLIENTES; i++)
@@ -428,7 +463,7 @@ int main()
 
         if (pid == 0)
         {
-            /* HIJO: atiende la sesión */
+            /* HIJO: cierra el socket del servidor y atiende solo esta sesión */
             close(servidor_fd);
 
             printf("[HIJO] Iniciando sesión de juego\n");
